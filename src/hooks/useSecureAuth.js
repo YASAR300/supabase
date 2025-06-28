@@ -1,12 +1,12 @@
 import { useState, useEffect, useCallback } from 'react';
-import { supabase, validateSession, secureLogout } from '../lib/supabaseClient';
+import { supabase } from '../lib/supabaseClient';
 import { authRateLimiter, getDeviceFingerprint, SessionManager } from '../utils/security';
 import { validateAuthForm } from '../utils/validation';
 
 export const useSecureAuth = () => {
   const [state, setState] = useState({
     user: null,
-    loading: true,
+    loading: false,
     error: '',
     isRateLimited: false,
     remainingTime: 0,
@@ -37,81 +37,10 @@ export const useSecureAuth = () => {
     }));
   }, [deviceFingerprint]);
 
-  // Initialize auth state
+  // Initialize rate limiting check
   useEffect(() => {
-    const initializeAuth = async () => {
-      try {
-        const session = await validateSession();
-        setState(prev => ({
-          ...prev,
-          user: session?.user ?? null,
-          loading: false,
-        }));
-
-        if (session?.user) {
-          sessionManager.start();
-        }
-      } catch (error) {
-        console.error('Auth initialization error:', error);
-        setState(prev => ({
-          ...prev,
-          user: null,
-          loading: false,
-          error: 'Failed to initialize authentication',
-        }));
-      }
-    };
-
-    initializeAuth();
-
-    // Listen for auth changes
-    const { data: { subscription } } = supabase.auth.onAuthStateChange(
-      async (event, session) => {
-        setState(prev => ({
-          ...prev,
-          user: session?.user ?? null,
-          loading: false,
-        }));
-
-        if (session?.user) {
-          sessionManager.start();
-        } else {
-          sessionManager.clear();
-        }
-
-        // Reset rate limiting on successful auth
-        if (event === 'SIGNED_IN') {
-          authRateLimiter.reset(deviceFingerprint);
-          updateRateLimitStatus();
-        }
-      }
-    );
-
-    return () => {
-      subscription.unsubscribe();
-      sessionManager.clear();
-    };
-  }, [deviceFingerprint, sessionManager, updateRateLimitStatus]);
-
-  // Activity tracking for session management
-  useEffect(() => {
-    const handleActivity = () => {
-      if (state.user) {
-        sessionManager.reset();
-      }
-    };
-
-    const events = ['mousedown', 'mousemove', 'keypress', 'scroll', 'touchstart'];
-    events.forEach(event => {
-      document.addEventListener(event, handleActivity, true);
-    });
-
-    return () => {
-      events.forEach(event => {
-        document.removeEventListener(event, handleActivity, true);
-      });
-    };
-  }, [state.user, sessionManager]);
+    updateRateLimitStatus();
+  }, [updateRateLimitStatus]);
 
   const signIn = useCallback(async (email, password) => {
     // Check rate limiting
@@ -137,19 +66,29 @@ export const useSecureAuth = () => {
     setState(prev => ({ ...prev, loading: true, error: '' }));
 
     try {
-      const { error } = await supabase.auth.signInWithPassword({
+      const { data, error } = await supabase.auth.signInWithPassword({
         email: validation.data.email,
         password: validation.data.password,
       });
 
       if (error) throw error;
 
-      // Reset rate limiting on successful login
-      authRateLimiter.reset(deviceFingerprint);
-      updateRateLimitStatus();
+      if (data.user) {
+        // Reset rate limiting on successful login
+        authRateLimiter.reset(deviceFingerprint);
+        updateRateLimitStatus();
+        sessionManager.start();
+        
+        setState(prev => ({ 
+          ...prev, 
+          loading: false,
+          user: data.user,
+          error: ''
+        }));
+        return true;
+      }
       
-      setState(prev => ({ ...prev, loading: false }));
-      return true;
+      throw new Error('Login failed');
     } catch (error) {
       updateRateLimitStatus();
       setState(prev => ({
@@ -159,7 +98,7 @@ export const useSecureAuth = () => {
       }));
       return false;
     }
-  }, [deviceFingerprint, updateRateLimitStatus]);
+  }, [deviceFingerprint, updateRateLimitStatus, sessionManager]);
 
   const signUp = useCallback(async (email, password) => {
     // Check rate limiting
@@ -185,20 +124,32 @@ export const useSecureAuth = () => {
     setState(prev => ({ ...prev, loading: true, error: '' }));
 
     try {
-      const { error } = await supabase.auth.signUp({
+      console.log('Creating account for:', validation.data.email);
+      
+      // Sign up WITHOUT email confirmation (for development)
+      const { data, error } = await supabase.auth.signUp({
         email: validation.data.email,
         password: validation.data.password,
+        options: {
+          emailRedirectTo: undefined, // No email confirmation needed
+        }
       });
 
-      if (error) throw error;
+      if (error) {
+        console.error('Signup error:', error);
+        throw error;
+      }
+
+      console.log('Signup successful:', data);
 
       // Reset rate limiting on successful signup
       authRateLimiter.reset(deviceFingerprint);
       updateRateLimitStatus();
       
-      setState(prev => ({ ...prev, loading: false }));
+      setState(prev => ({ ...prev, loading: false, error: '' }));
       return true;
     } catch (error) {
+      console.error('Signup failed:', error);
       updateRateLimitStatus();
       setState(prev => ({
         ...prev,
@@ -223,32 +174,55 @@ export const useSecureAuth = () => {
     setState(prev => ({ ...prev, loading: true, error: '' }));
 
     try {
-      const { error } = await supabase.auth.signInAnonymously();
-      if (error) throw error;
-
-      // Reset rate limiting on successful login
-      authRateLimiter.reset(deviceFingerprint);
-      updateRateLimitStatus();
+      // Create anonymous session
+      const { data, error } = await supabase.auth.signInAnonymously();
       
-      setState(prev => ({ ...prev, loading: false }));
-      return true;
+      if (error) {
+        console.error('Anonymous sign in error:', error);
+        throw error;
+      }
+
+      if (data.user) {
+        // Reset rate limiting on successful login
+        authRateLimiter.reset(deviceFingerprint);
+        updateRateLimitStatus();
+        sessionManager.start();
+        
+        setState(prev => ({ 
+          ...prev, 
+          loading: false,
+          user: data.user,
+          error: ''
+        }));
+        return true;
+      } else {
+        throw new Error('Failed to create anonymous session');
+      }
     } catch (error) {
+      console.error('Anonymous sign in failed:', error);
       updateRateLimitStatus();
       setState(prev => ({
         ...prev,
         loading: false,
-        error: error.message || 'Anonymous sign in failed',
+        error: error.message || 'Guest sign in failed. Please try again.',
       }));
       return false;
     }
-  }, [deviceFingerprint, updateRateLimitStatus]);
+  }, [deviceFingerprint, updateRateLimitStatus, sessionManager]);
 
   const signOut = useCallback(async () => {
     setState(prev => ({ ...prev, loading: true }));
     
     try {
-      await secureLogout();
+      await supabase.auth.signOut();
       sessionManager.clear();
+      
+      // Clear any additional client-side data
+      if (typeof window !== 'undefined') {
+        window.localStorage.removeItem('supabase.auth.token');
+        window.sessionStorage.clear();
+      }
+      
       setState(prev => ({
         ...prev,
         user: null,

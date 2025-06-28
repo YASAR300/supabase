@@ -35,6 +35,18 @@ export default function SecurityAlert({
     }
   };
 
+  const formatTime = (seconds) => {
+    if (seconds < 60) {
+      return `${seconds} seconds`;
+    }
+    const minutes = Math.floor(seconds / 60);
+    const remainingSeconds = seconds % 60;
+    if (remainingSeconds === 0) {
+      return `${minutes} minute${minutes > 1 ? 's' : ''}`;
+    }
+    return `${minutes}m ${remainingSeconds}s`;
+  };
+
   return (
     <div className={`p-4 rounded-lg border ${getAlertStyles()} mb-4`}>
       <div className="flex items-start gap-3">
@@ -58,7 +70,7 @@ export default function SecurityAlert({
           {countdown !== undefined && countdown > 0 && (
             <div className="flex items-center gap-2 mt-2 text-sm">
               <Clock className="w-4 h-4" />
-              <span>Try again in {countdown} seconds</span>
+              <span>Try again in {formatTime(countdown)}</span>
             </div>
           )}
           

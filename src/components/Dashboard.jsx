@@ -47,7 +47,7 @@ export default function Dashboard({ user, onLogout }) {
     {
       name: 'Session Timeout',
       status: 'active',
-      description: 'Automatic logout after 30 minutes of inactivity'
+      description: 'Automatic logout after 60 minutes of inactivity'
     }
   ];
 

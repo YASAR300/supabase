@@ -1,6 +1,6 @@
 // Rate limiting utility
 class RateLimiter {
-  constructor(maxAttempts = 5, windowMs = 15 * 60 * 1000) {
+  constructor(maxAttempts = 10, windowMs = 5 * 60 * 1000) {
     this.attempts = new Map();
     this.maxAttempts = maxAttempts;
     this.windowMs = windowMs;
@@ -36,9 +36,9 @@ class RateLimiter {
   }
 }
 
-// Create rate limiter instances
-export const authRateLimiter = new RateLimiter(5, 15 * 60 * 1000); // 5 attempts per 15 minutes
-export const generalRateLimiter = new RateLimiter(10, 60 * 1000); // 10 attempts per minute
+// Create rate limiter instances with more lenient settings
+export const authRateLimiter = new RateLimiter(10, 5 * 60 * 1000); // 10 attempts per 5 minutes
+export const generalRateLimiter = new RateLimiter(20, 60 * 1000); // 20 attempts per minute
 
 // CSRF token management
 export const generateCSRFToken = () => {
@@ -131,8 +131,8 @@ export class SessionManager {
   constructor(onTimeout, onWarning) {
     this.timeoutId = null;
     this.warningTimeoutId = null;
-    this.TIMEOUT_DURATION = 30 * 60 * 1000; // 30 minutes
-    this.WARNING_DURATION = 25 * 60 * 1000; // 25 minutes
+    this.TIMEOUT_DURATION = 60 * 60 * 1000; // 60 minutes (increased from 30)
+    this.WARNING_DURATION = 55 * 60 * 1000; // 55 minutes (increased from 25)
     this.onTimeout = onTimeout;
     this.onWarning = onWarning;
   }

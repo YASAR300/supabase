@@ -14,14 +14,15 @@ try {
   throw new Error('Invalid VITE_SUPABASE_URL format. Please provide a valid URL.');
 }
 
-// Enhanced Supabase client with security configurations
+// Enhanced Supabase client - DEVELOPMENT MODE (No Email Confirmation Required)
 export const supabase = createClient(supabaseUrl, supabaseAnonKey, {
   auth: {
     // Enhanced security settings
     autoRefreshToken: true,
     persistSession: true,
-    detectSessionInUrl: true,
+    detectSessionInUrl: false, // Disable URL session detection for simpler flow
     flowType: 'pkce', // Use PKCE flow for enhanced security
+    debug: false, // Disable debug to reduce console noise
     // Secure storage options
     storage: {
       getItem: (key) => {
@@ -48,39 +49,3 @@ export const supabase = createClient(supabaseUrl, supabaseAnonKey, {
     },
   },
 })
-
-// Session validation helper
-export const validateSession = async () => {
-  try {
-    const { data: { session }, error } = await supabase.auth.getSession();
-    if (error) throw error;
-    
-    // Additional session validation
-    if (session) {
-      const now = Math.floor(Date.now() / 1000);
-      if (session.expires_at && session.expires_at < now) {
-        await supabase.auth.signOut();
-        return null;
-      }
-    }
-    
-    return session;
-  } catch (error) {
-    console.error('Session validation error:', error);
-    return null;
-  }
-};
-
-// Secure logout helper
-export const secureLogout = async () => {
-  try {
-    await supabase.auth.signOut();
-    // Clear any additional client-side data
-    if (typeof window !== 'undefined') {
-      window.localStorage.clear();
-      window.sessionStorage.clear();
-    }
-  } catch (error) {
-    console.error('Logout error:', error);
-  }
-};

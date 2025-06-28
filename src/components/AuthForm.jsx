@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Mail, Lock, Eye, EyeOff, User, AlertCircle } from 'lucide-react';
+import { Mail, Lock, Eye, EyeOff, User, AlertCircle, CheckCircle, UserCheck } from 'lucide-react';
 import { useSecureAuth } from '../hooks/useSecureAuth';
 import PasswordStrengthIndicator from './PasswordStrengthIndicator';
 import SecurityAlert from './SecurityAlert';
@@ -13,6 +13,7 @@ export default function AuthForm({ onAuthSuccess }) {
   const [showPassword, setShowPassword] = useState(false);
   const [showPasswordStrength, setShowPasswordStrength] = useState(false);
   const [csrfToken, setCsrfToken] = useState('');
+  const [showSuccessMessage, setShowSuccessMessage] = useState(false);
 
   const {
     loading,
@@ -35,6 +36,7 @@ export default function AuthForm({ onAuthSuccess }) {
   // Clear error when switching between login/signup
   useEffect(() => {
     clearError();
+    setShowSuccessMessage(false);
   }, [isLogin, clearError]);
 
   const handleAuth = async (e) => {
@@ -49,14 +51,23 @@ export default function AuthForm({ onAuthSuccess }) {
       success = await signIn(sanitizedEmail, sanitizedPassword);
     } else {
       success = await signUp(sanitizedEmail, sanitizedPassword);
+      if (success) {
+        setShowSuccessMessage(true);
+        // Auto switch to login after successful signup
+        setTimeout(() => {
+          setIsLogin(true);
+          setShowSuccessMessage(false);
+        }, 3000);
+      }
     }
     
-    if (success) {
+    if (success && isLogin) {
       onAuthSuccess();
     }
   };
 
   const handleGuestLogin = async () => {
+    clearError();
     const success = await signInAnonymously();
     if (success) {
       onAuthSuccess();
@@ -92,6 +103,16 @@ export default function AuthForm({ onAuthSuccess }) {
             </p>
           </div>
 
+          {/* Success Message for Signup */}
+          {showSuccessMessage && (
+            <SecurityAlert
+              type="info"
+              title="Account Created Successfully!"
+              message="Your account has been created. You can now sign in with your credentials."
+              onClose={() => setShowSuccessMessage(false)}
+            />
+          )}
+
           {/* Security Alerts */}
           {isRateLimited && (
             <SecurityAlert
@@ -102,7 +123,7 @@ export default function AuthForm({ onAuthSuccess }) {
             />
           )}
 
-          {error && !isRateLimited && (
+          {error && !isRateLimited && !showSuccessMessage && (
             <SecurityAlert
               type="error"
               title="Authentication Error"
@@ -198,9 +219,19 @@ export default function AuthForm({ onAuthSuccess }) {
             <button
               onClick={handleGuestLogin}
               disabled={loading || isRateLimited}
-              className="mt-4 w-full bg-gray-100 hover:bg-gray-200 text-gray-700 font-semibold py-3 px-4 rounded-lg transition-all duration-200 transform hover:scale-[1.02] disabled:opacity-50 disabled:cursor-not-allowed disabled:transform-none"
+              className="mt-4 w-full bg-gray-100 hover:bg-gray-200 text-gray-700 font-semibold py-3 px-4 rounded-lg transition-all duration-200 transform hover:scale-[1.02] disabled:opacity-50 disabled:cursor-not-allowed disabled:transform-none flex items-center justify-center gap-2"
             >
-              Continue as Guest
+              {loading ? (
+                <>
+                  <div className="w-5 h-5 border-2 border-gray-400/20 border-t-gray-400 rounded-full animate-spin"></div>
+                  Creating Guest Session...
+                </>
+              ) : (
+                <>
+                  <UserCheck className="w-5 h-5" />
+                  Continue as Guest
+                </>
+              )}
             </button>
           </div>
 
@@ -217,8 +248,26 @@ export default function AuthForm({ onAuthSuccess }) {
             </p>
           </div>
 
+          {/* Development Notice */}
+          {!isLogin && (
+            <div className="mt-6 p-3 bg-blue-50 rounded-lg border border-blue-200">
+              <div className="flex items-center gap-2 text-xs text-blue-700">
+                <CheckCircle className="w-4 h-4" />
+                <span>Email confirmation is disabled for development. You can sign in immediately after creating an account.</span>
+              </div>
+            </div>
+          )}
+
+          {/* Guest Login Notice */}
+          <div className="mt-4 p-3 bg-green-50 rounded-lg border border-green-200">
+            <div className="flex items-center gap-2 text-xs text-green-700">
+              <UserCheck className="w-4 h-4" />
+              <span>Guest access provides full functionality without requiring an account. Your session will be temporary.</span>
+            </div>
+          </div>
+
           {/* Security Notice */}
-          <div className="mt-6 p-3 bg-gray-50 rounded-lg border">
+          <div className="mt-4 p-3 bg-gray-50 rounded-lg border">
             <div className="flex items-center gap-2 text-xs text-gray-600">
               <AlertCircle className="w-4 h-4" />
               <span>Your connection is secure and your data is protected with industry-standard encryption.</span>
